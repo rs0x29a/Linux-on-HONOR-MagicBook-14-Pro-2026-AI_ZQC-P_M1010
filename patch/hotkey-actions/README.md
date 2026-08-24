@@ -81,7 +81,10 @@ a power profile through `powerprofilesctl`, and `authorized` on one USB device.
 The systemd unit is confined accordingly, with `ProtectSystem=strict` and
 `/sys/bus/usb/devices` as the only writable path.
 
-The keyboard backlight keys are left alone on purpose. They arrive correctly,
-but there is no keyboard backlight device in `/sys/class/leds` on this machine
+The keyboard backlight keys are not handled by this service. On the ZQC-P the
+firmware exposes three EC-backed levels, but the in-tree WMI path may return
+`-ENODEV`; use the dedicated keyboard-backlight fix when it is enabled for the
+profile. If `/sys/class/leds/huawei::kbd_backlight` exists but writes fail,
+include that output in `tools/doctor.sh --json` and open an issue.
 to drive: the EC appears to handle the backlight itself and only notify the OS
 afterwards, which is what the `0x2e5` code is. Nothing to act on.

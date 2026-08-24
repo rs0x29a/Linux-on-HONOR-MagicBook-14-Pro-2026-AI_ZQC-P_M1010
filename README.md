@@ -1,4 +1,4 @@
-# Linux on the HONOR MagicBook Pro
+# Linux on the HONOR MagicBook Pro 14 2026 AI
 
 Fixes that make HONOR MagicBook Pro laptops usable under Linux: a patched ACPI
 table for the touchpad and touchscreen, kernel-module quirks for audio and
@@ -35,13 +35,14 @@ recognise it. `uninstall_patch.sh` reverts everything.
 | Panel driven at 6 bits per colour, banding on gradients | works, opt-in | [`patch/edp-dsc/`](patch/edp-dsc/) — the link cannot carry 8 bpc and the driver drops colour depth before it will compress; a kernel patch makes it prefer DSC on eDP, with a fallback to the old behaviour |
 | Battery charge limit does nothing | works | [`patch/battery/`](patch/battery/) — the EC only enforces HONOR's own preset pairs; anything else, including what the desktop sets, is stored and ignored |
 | Performance and camera keys do nothing | works | [`patch/hotkey-actions/`](patch/hotkey-actions/) — a small service acts on the keys the desktop ignores |
+| Keyboard backlight keys do nothing | experimental, opt-in | [`patch/keyboard-backlight/`](patch/keyboard-backlight/) — EC-backed three-level LED driver for the verified ZQC-P profile; needs a physical test on the target unit |
 | Some Fn keys dead, `Unknown key pressed` in dmesg | works | [`patch/hotkeys/`](patch/hotkeys/) — adds the HONOR codes to the `huawei-wmi` keymap |
 | Fan RPM readout | works | [`patch/fan/`](patch/fan/) — `honor-ec-sensors` |
-| Fan speed control | not available | every OS-side path to a duty cycle was tested and the EC ignores all of them. The EC's *curve* can be selected through `\IFCI`, which is measured but deliberately not shipped, one of its thirteen tables switches the fans off. See [`patch/fan/README.md`](patch/fan/README.md) |
-| SOF DSP suspend/resume panic | preventive | [`patch/sof-audio/`](patch/sof-audio/) — upstream IPC4 backport, the race never reproduced here. Merged upstream and released in Linux 7.2 |
+| Fan speed control | curve control available, opt-in | direct PWM/RPM control is not exposed by the EC, but the validated early-engagement curves can be selected through [`patch/fan-curve/`](patch/fan-curve/). The controller forbids `0xAC`, monitors temperature and returns to stock `0xA0` on failsafe |
+| SOF DSP suspend/resume panic | automatically handled | [`patch/sof-audio/`](patch/sof-audio/) — applies the backport only when the running kernel lacks the upstream fix, and removes a redundant overlay when it is already present |
 | Fixes reverted by package updates | handled | [`patch/auto-rebuild/`](patch/auto-rebuild/) — package-manager hooks that rebuild them |
-| Caps Lock LED | works from Linux 7.2 | it was collateral of `i8042.dumbkbd=1`. The upstream `atkbd` quirk for this machine is in **7.2** and queued for **7.1.10**; there, drop the parameter. See [`patch/keyboard-atkbd/`](patch/keyboard-atkbd/) |
-| Fn+F7 mic-mute key itself | works out of the box | in-tree `huawei-wmi`, nothing to install |
+| Caps Lock LED | automatic from Linux 7.2 | `apply_patch.sh` detects the upstream `atkbd` quirk and removes redundant `i8042.dumbkbd=1`; older kernels keep the workaround. See [`patch/keyboard-atkbd/`](patch/keyboard-atkbd/) |
+| Fn+F7 mic-mute key itself | verified in-tree | `huawei-wmi` already emits `KEY_MICMUTE`; `tools/doctor.sh` reports the input device and mic-mute LED so a broken desktop/audio stack is distinguishable from a dead key |
 
 Speakers, headphone output, the built-in DMIC array, webcam, Wi-Fi and
 Bluetooth need nothing beyond the ACPI override. One report on a BIOS 1.09 unit
@@ -110,7 +111,7 @@ willing to run the fixes; see [below](#have-a-model-that-is-not-covered).
 ## Installing
 
 ```bash
-git clone <this-repo> HONOR_ZQC-P_M1010
+git clone https://github.com/rs0x29a/Linux-on-HONOR-MagicBook-14-Pro-2026-AI_ZQC-P_M1010.git HONOR_ZQC-P_M1010
 cd HONOR_ZQC-P_M1010
 sudo ./apply_patch.sh
 sudo reboot
@@ -157,9 +158,11 @@ Right now exactly one profile is `verified`, the machine this was built on.
 | `SKIP_OLED=1` | leave the OLED backlight floor at the firmware value |
 | `SKIP_EDGE=1` | leave the touchpad left-edge brightness gesture dead |
 | `SKIP_FAN=1` | no fan RPM readout |
+| `FAN_CURVE=0xAA` or `0xAB` | opt into the guarded earlier fan-engagement curve; `0xA0` is stock and `0xAC` is rejected |
 | `SKIP_FINGERPRINT=1` | no `libfprint` rebuild, by far the slowest step |
 | `VBT_MIN=<n>` | backlight floor in n/255, default 12. Measure yours first with `patch/oled-backlight/measure-floor.sh` |
 | `WITH_CDCLK=1` | rebuild `xe.ko` with the Panther Lake cdclk fix. Off by default: it downloads the distro kernel source, about 260 MB, and compiles for a few minutes |
+| `WITH_DSC=1` | rebuild `xe.ko` with the eDP DSC preference. Off by default for the same kernel-source download/build reason |
 | `CHARGE_PRESET="40 70"` | which battery charge preset to arm. Only the pairs the EC enforces work, see [`patch/battery/README.md`](patch/battery/README.md) |
 | `FORCE_ACPI=1` | install the ACPI override even though your machine's `I2C_DEVT` table is not the one it was built from. That mismatch means a BIOS update rewrote it or this is a different machine; read [docs/RESEARCH.md](docs/RESEARCH.md) first |
 | `ALLOW_UNVERIFIED=1` | run on a model whose profile is not `verified`, restricted to the fixes that derive their own inputs |
@@ -167,6 +170,9 @@ Right now exactly one profile is `verified`, the machine this was built on.
 
 The full step-by-step, how to verify it worked, and notes for other
 bootloaders: **[docs/INSTALL.md](docs/INSTALL.md)**.
+
+For a post-reboot health check, run `sudo bash tools/doctor.sh`. It does not
+change the system and can write a redacted JSON report with `--json`.
 
 ---
 

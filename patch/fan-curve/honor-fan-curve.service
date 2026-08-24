@@ -1,0 +1,17 @@
+[Unit]
+Description=HONOR ZQC-P safe fan-curve controller
+After=acpi_call.service
+Before=systemd-suspend.service
+ConditionPathExists=/proc/acpi/call
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/honor/honor-fan-curve.sh monitor
+ExecStop=/usr/local/lib/honor/honor-fan-curve.sh reset
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

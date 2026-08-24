@@ -89,10 +89,14 @@ echo "[6/15] Remove the auto-rebuild package-manager hooks"
 rm -fv /etc/pacman.d/hooks/95-honor-kernel-modules.hook \
        /etc/pacman.d/hooks/96-honor-libfprint.hook \
        /etc/kernel/postinst.d/95-honor-kernel-modules \
+       /etc/systemd/system/honor-autorebuild.path \
+       /etc/systemd/system/honor-autorebuild.service \
        /usr/local/lib/honor/rebuild.sh \
        /usr/local/lib/honor/deferred.sh \
        /etc/honor-autorebuild.conf
 rmdir --ignore-fail-on-non-empty /usr/local/lib/honor 2>/dev/null || true
+systemctl disable --now honor-autorebuild.path >/dev/null 2>&1 || true
+systemctl daemon-reload 2>/dev/null || true
 
 echo "[7/15] Remove the HID-BPF mic-mute fixup and any legacy module overlays"
 systemctl disable --now honor-hid-bpf-reapply.service 2>/dev/null || true
@@ -199,6 +203,25 @@ else
     echo "    no camera id on record; if your webcam is missing, re-authorise it"
     echo "    with: echo 1 | sudo tee /sys/bus/usb/devices/<dev>/authorized"
 fi
+
+# The keyboard backlight is a separate DKMS module because it owns the EC LED.
+echo "[14a/15] Remove the EC keyboard backlight"
+modprobe -r honor-zqcp-kbdlight 2>/dev/null || true
+if command -v dkms >/dev/null 2>&1 && dkms status 2>/dev/null | grep -q '^honor-zqcp-kbdlight'; then
+    dkms remove -m honor-zqcp-kbdlight -v 1.0 --all >/dev/null 2>&1 || \
+        step_failed "dkms remove honor-zqcp-kbdlight/1.0 failed"
+fi
+rm -rfv /usr/src/honor-zqcp-kbdlight-1.0 \
+        /etc/modules-load.d/honor-zqcp-kbdlight.conf 2>/dev/null || true
+rm -fv /usr/lib/modules/*/updates/honor-zqcp-kbdlight.ko* \
+       /lib/modules/*/updates/honor-zqcp-kbdlight.ko* 2>/dev/null || true
+
+echo "[14b/15] Remove the fan curve controller"
+systemctl disable --now honor-fan-curve.service >/dev/null 2>&1 || true
+rm -fv /etc/systemd/system/honor-fan-curve.service \
+       /etc/honor-fan-curve.conf \
+       /usr/local/lib/honor/honor-fan-curve.sh 2>/dev/null || true
+systemctl daemon-reload 2>/dev/null || true
 
 echo "[14/15] Remove the fan sensor module"
 # apply_patch.sh installs this by default, so uninstall has to take it out.

@@ -1,4 +1,4 @@
-# SOF DSP suspend/resume panic — preventive backport
+# SOF DSP suspend/resume panic — self-disabling compatibility fix
 
 | | |
 |---|---|

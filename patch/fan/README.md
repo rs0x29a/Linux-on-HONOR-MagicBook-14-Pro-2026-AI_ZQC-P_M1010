@@ -96,7 +96,7 @@ all of them:
 never written. They do mirror real EC state: idle with fans stopped reads
 `EN=0, PD=32`; running while cooling reads `EN=1, PD=37/36`.
 
-### Choosing the EC's fan curve: yes, and it is not shipped
+### Choosing the EC's fan curve: yes
 
 The EC carries **thirteen fan tables**, and firmware exposes a method to pick
 between them. This is the answer to "the fans ramp far later than on Windows",
@@ -132,17 +132,15 @@ accepts anything, so **stay inside it**.
 > passively cooled laptop under load. `FTSL` resets to `0xA0` on a power
 > cycle, not on a reboot.
 
-**Why this is not a fix in this repository.** The engagement thresholds above
-are provisional: `0xAB` scattered 53 °C against 65 °C across two runs, because
-residual heatsink soak differed, and `0xA1`-`0xA4` and `0xA6`-`0xA8` were never
-tested at all. Shipping "set `0xAB` at boot" on that evidence would be shipping
-a number nobody has pinned down, on a register that also has a value which
-turns the cooling off. The measurement to redo is: cold start, fans stopped,
-apply the table while cold and idle, then a fixed load ramp, and record the
-temperature at first fan motion — two or three runs per table with matched
-thermal history.
+The repository now ships a guarded, opt-in controller in
+[`../fan-curve/`](../fan-curve/). It accepts only the stock `0xA0` and the two
+measured early-engagement values `0xAA`/`0xAB`, never exposes `0xAC`, and returns
+to stock when the service stops or the CPU thermal sensor reaches its failsafe.
+The thresholds remain provisional, so the controller is intentionally opt-in.
 
-If you want to try it yourself, `acpi_call` is the way in, and the argument
+If you want to try the guarded controller, install
+[`../fan-curve/`](../fan-curve/) with `FAN_CURVE=0xAA`. For raw manual testing,
+`acpi_call` is the way in, and the argument
 must be a contiguous hex string with no commas:
 
 ```sh

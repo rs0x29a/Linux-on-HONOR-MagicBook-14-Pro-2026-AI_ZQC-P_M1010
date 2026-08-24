@@ -28,11 +28,13 @@ affected.
 | 11 | Runs `patch/micmute/install.sh` — builds and installs the HID-BPF descriptor fixup through `udev-hid-bpf` |
 | 12 | Runs `patch/touchpad-edge/install.sh` — HID-BPF program for the left-edge brightness gesture |
 | 13 | Runs `patch/fan/install.sh` — `honor-ec-sensors`, EC fan tachometers, through DKMS |
+| 13b | If `FAN_CURVE=0xAA` or `0xAB` is set, enables the guarded early-engagement curve with a thermal failsafe |
 | 14 | Runs `patch/fingerprint/install.sh` — rebuilds `libfprint` with the Goodix `27c6:6f94` id |
 | 15 | Runs `patch/battery/install.sh` — arms a charge preset the EC actually enforces, and keeps it armed across boots |
 | 16 | Runs `patch/hotkeys/install.sh` — rebuilds `huawei-wmi` with the HONOR hotkey codes, plus a hwdb entry for the atkbd noise |
 | 17 | Runs `patch/hotkey-actions/install.sh` — the performance key cycles power profiles, the camera key switches the webcam off |
-| 18 | Runs `patch/auto-rebuild/install.sh` — package-manager hooks that keep steps 9, 10 and 14 applied across package updates |
+| 18 | Runs `patch/keyboard-backlight/install.sh` — an experimental EC-backed LED driver for the verified ZQC-P profile |
+| 19 | Runs `patch/auto-rebuild/install.sh` — package-manager hooks that keep steps 9, 10 and 14 applied across package updates |
 
 Steps 9 and 10 are skipped with a warning if kernel lockdown or
 `module.sig_enforce=1` would block an unsigned module. Step 2 warns about
@@ -75,7 +77,7 @@ sensors | grep -A3 honor_ec
 Both kernel-module fixes install into `/usr/lib/modules/$KVER/updates/`, which
 `depmod` searches before `kernel/`, so a package update never overwrites them.
 What it does do is produce a *new* kernel that has no `updates/` entry yet. The
-hooks from step 17 fill that in automatically, and re-apply the
+hooks from step 18 fill that in automatically, and re-apply the
 fingerprint patch after a libfprint update.
 
 Everything else needs nothing: the ACPI override is firmware data, the HID-BPF
@@ -149,4 +151,3 @@ ignoring table override`. Under kernel lockdown the override is silently
 discarded and the touchpad stays missing.
 
 ---
-

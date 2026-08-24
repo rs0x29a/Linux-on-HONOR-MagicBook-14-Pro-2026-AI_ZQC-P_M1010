@@ -284,6 +284,7 @@ distro_kernel_hook_supported() {
     case "$(distro_family)" in
         arch)   [[ -d /etc/pacman.d ]] ;;
         debian) [[ -d /etc/kernel ]] ;;
+        fedora) command -v systemctl >/dev/null 2>&1 ;;
         *)      return 1 ;;
     esac
 }

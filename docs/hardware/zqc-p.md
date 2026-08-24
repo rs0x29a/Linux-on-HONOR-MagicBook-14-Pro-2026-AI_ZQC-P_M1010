@@ -532,7 +532,9 @@ latch the level so it stops timing out. That is the same mapping `\SKBM`
 implements here, arrived at independently. What it would need is a DMI entry
 for this machine and somebody willing to test it.
 
-Nothing here drives it yet.
+The repository now contains an **experimental, opt-in** DMI-gated driver in
+[`patch/keyboard-backlight/`](../../patch/keyboard-backlight/). It must be
+tested on a real ZQC-P before its status can be upgraded from experimental.
 
 ## The speakers disagreement
 

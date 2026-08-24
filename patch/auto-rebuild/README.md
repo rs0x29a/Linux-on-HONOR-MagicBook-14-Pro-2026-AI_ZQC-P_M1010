@@ -4,7 +4,7 @@
 |---|---|
 | Problem | some fixes live inside files a package update replaces |
 | Fix | package-manager hooks that rebuild them automatically |
-| Scope | Arch (pacman hooks) and Debian/Ubuntu (`/etc/kernel/postinst.d`) |
+| Scope | Arch (pacman hooks), Debian/Ubuntu (`/etc/kernel/postinst.d`) and Fedora/Bazzite (systemd path unit) |
 
 ```sh
 sudo bash patch/auto-rebuild/install.sh
@@ -44,6 +44,13 @@ mic-mute fixup is a CO-RE BPF object, and the fan module uses DKMS.
 upgrade is not a kernel event and there is no equivalent hook directory for it,
 so re-run [`patch/fingerprint/install.sh`](../fingerprint/install.sh) by hand
 after one. The installer says so when it runs there.
+
+**On Fedora and Bazzite**, the installer enables
+`honor-autorebuild.path`, which watches `/usr/lib/modules` after a kernel
+deployment and schedules the rebuild outside the deployment. Immutable images,
+Secure Boot and signed-module policy can still reject an overlay; the log names
+the exact installer to re-run and `tools/doctor.sh --json` reports the resulting
+state.
 
 Both kernel-module fixes install into `/usr/lib/modules/$KVER/updates/`, which
 `depmod` searches before `kernel/`, so the packaged modules are never

@@ -33,12 +33,13 @@ legacy_move /etc/honor-zqcp-autorebuild.conf /etc/honor-autorebuild.conf
 legacy_drop /etc/pacman.d/hooks/95-honor-zqcp-kernel-modules.hook \
             /etc/pacman.d/hooks/96-honor-zqcp-libfprint.hook
 
-# Arch has pacman hooks, Debian has /etc/kernel/postinst.d. They are the same
-# idea: run something after the package manager has put a new kernel in place.
+# Arch has pacman hooks, Debian has /etc/kernel/postinst.d, and Fedora/Bazzite
+# use a systemd path unit because kernel deployment is not a pacman transaction.
 HOOK_STYLE="$(distro_family)"
 case "$HOOK_STYLE" in
     arch)   command -v pacman >/dev/null || die "pacman not found" ;;
     debian) [[ -d /etc/kernel ]] || die "no /etc/kernel; cannot install a kernel hook" ;;
+    fedora) command -v systemctl >/dev/null || die "systemctl not found" ;;
     *)      die "No kernel-update hook mechanism is known for this distribution.
     Re-run the installers in patch/headset-mic/ and patch/sof-audio/ after each
     kernel update by hand." ;;
@@ -65,7 +66,7 @@ if [[ "$HOOK_STYLE" == arch ]]; then
     install -d -m 0755 "$HOOK_DIR"
     install -m 0644 "${SCRIPT_DIR}/95-honor-kernel-modules.hook" "$HOOK_DIR/"
     install -m 0644 "${SCRIPT_DIR}/96-honor-libfprint.hook"      "$HOOK_DIR/"
-else
+elif [[ "$HOOK_STYLE" == debian ]]; then
     # Debian passes the new kernel version as $1 and runs these after the
     # kernel package is unpacked, which is exactly when the modules overlay
     # needs rebuilding. There is no libfprint equivalent: a libfprint upgrade
@@ -83,6 +84,34 @@ HOOKEOF
     chmod 0755 "${HOOK_DIR}/95-honor-kernel-modules"
     warn "on this distribution only the kernel-module rebuild is hooked."
     warn "Re-run patch/fingerprint/install.sh by hand after a libfprint update."
+fi
+
+if [[ "$HOOK_STYLE" == fedora ]]; then
+    HOOK_DIR=/etc/systemd/system
+    install -d -m 0755 /etc/systemd/system
+    cat > /etc/systemd/system/honor-autorebuild.service <<UNITEOF
+[Unit]
+Description=Rebuild HONOR laptop kernel fixes after a kernel deployment
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=${LIB_DIR}/rebuild.sh modules
+UNITEOF
+    cat > /etc/systemd/system/honor-autorebuild.path <<UNITEOF
+[Unit]
+Description=Watch for HONOR laptop kernel deployments
+
+[Path]
+PathChanged=/usr/lib/modules
+Unit=honor-autorebuild.service
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+    systemctl daemon-reload
+    systemctl enable --now honor-autorebuild.path >/dev/null 2>&1 \
+        || warn "could not enable honor-autorebuild.path; run it manually after updates"
 fi
 
 cat > "$CONF" <<EOF
@@ -111,6 +140,16 @@ else
   one."
     UNINSTALL_HOOKS="${HOOK_DIR}/95-honor-kernel-modules"
 fi
+[[ "$HOOK_STYLE" == fedora ]] && {
+    INSTALLED_HOOKS="  /etc/systemd/system/honor-autorebuild.path
+  /etc/systemd/system/honor-autorebuild.service"
+    WHAT_IS_HOOKED="  A systemd path unit watches /usr/lib/modules after Fedora/Bazzite
+  kernel deployment and schedules the module rebuild outside the deployment.
+  DKMS and Secure Boot policies remain distro-specific.
+
+  Re-run patch/fingerprint/install.sh after a libfprint update."
+    UNINSTALL_HOOKS="/etc/systemd/system/honor-autorebuild.path /etc/systemd/system/honor-autorebuild.service"
+}
 
 cat <<EOF
 
