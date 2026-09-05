@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Product code | `ZQC-P`, board version `M1010`, board `ZQC-P-PCB` |
-| Platform | Intel Panther Lake, Core Ultra X9 388H |
-| Profile | [`devices/zqc-p.conf`](../../devices/zqc-p.conf) — both sections **verified**, `[board M1010]` measured here and [`[board M1050]`](#the-m1050-revision) from its owner |
-| Verified on | BIOS 1.10, CachyOS, kernel 7.1.8 |
+| Product code | `ZQC-P`, board versions `M1010`, `M1020`, `M1050`, board `ZQC-P-PCB` |
+| Platform | Intel Panther Lake, Core Ultra X9 388H or Core Ultra 5 338H |
+| Profile | [`devices/zqc-p.conf`](../../devices/zqc-p.conf) — three verified sections: `[board M1010]` measured here, [`[board M1020]`](#the-m1020-revision) with a smaller tested subset, and [`[board M1050]`](#the-m1050-revision) from its owner |
+| Verified on | M1010: BIOS 1.10, CachyOS, kernel 7.1.8; M1020: BIOS 1.10, CachyOS, kernel 7.2.2 |
 
 This is the machine the repository was built on: every value in the `[board
 M1010]` section of its profile was read off this unit and every fix was run on
@@ -13,7 +13,8 @@ it. Where a statement below is not a measurement taken here, it says whose it
 is.
 
 **`ZQC-P` is more than one machine.** Everything on this page is board `M1010`
-unless it says otherwise; see [the M1050 revision](#the-m1050-revision).
+unless it says otherwise; see [the M1020 revision](#the-m1020-revision) and
+[the M1050 revision](#the-m1050-revision).
 
 Other models: [index](README.md).
 
@@ -393,7 +394,8 @@ the measurement to redo are in
 
 ## The keyboard backlight is reachable
 
-Recorded as an open opportunity, not as something that works today.
+Implemented and physically verified on ZQC-P M1020/C170, BIOS 1.10 and Linux
+7.2.2. Other ZQC-P revisions remain gated out until tested on their hardware.
 
 It has been stated here that the backlight keys arrive but there is no LED
 device to drive. The firmware says otherwise. This machine's DSDT declares an
@@ -430,7 +432,26 @@ latch the level so it stops timing out. That is the same mapping `\SKBM`
 implements here, arrived at independently. What it would need is a DMI entry
 for this machine and somebody willing to test it.
 
-Nothing here drives it yet.
+The M1020 overlay now uses those firmware methods rather than raw EC writes.
+The physical key emitted `0x2b1`, `0x2b2`, `0x2b3` for off, low and high.
+`GKBM/SKBM` read and physically applied all three levels. An attempted `SKBM`
+value of 25 returned status `0x01` and left the mode unchanged, confirming that
+there are only two nonzero hardware levels, exposed to KDE as 50% and 100%.
+`GKBT` reported the stock 15-second timeout; setting `SKBT` to 5 read back as 5
+and physically switched the light off after about five seconds, after which 15
+was restored.
+
+The driver registers `/sys/class/leds/platform::kbd_backlight` with levels
+0/1/2 and hardware-change notification. After restarting UPower and PowerDevil,
+KDE showed the native keyboard OSD at 0%, 50% and 100%. systemd attached its
+standard backlight save/restore service, and the selected level was physically
+confirmed to survive a reboot. The installer accepts
+`KBDLIGHT_TIMEOUT=<0..65535>`, default 15; zero disables the timeout. A custom
+value is persisted in `/etc/modprobe.d/61-honor-keyboard-backlight.conf`.
+Touchpad activity cannot safely rearm a timed-out backlight: `SKBM` changes the
+level but does not restart the timer, and `SKBL` is a firmware stub. The known
+raw EC `0x01` latch from a sibling model is not used. The selected level was
+physically confirmed to survive suspend/resume as well as a full reboot.
 
 ## The speakers disagreement
 
@@ -508,6 +529,99 @@ it describes a clickpad that wrongly announces `BTN_RIGHT` — and nobody has
 reported that symptom here. Recorded because the next person to grep libinput
 for HONOR will find it and wonder.
 
+## The M1020 revision
+
+A global unit reports the same product and board names as M1010 but a different
+board revision and SKU. It was first measured on BIOS 1.09 with Kubuntu, then
+verified again after the BIOS 1.10 update and clean CachyOS installation:
+
+| | `M1020` measurement |
+|---|---|
+| DMI | `HONOR / ZQC-P / ZQC-P-PCB`, board `M1020`, SKU `C170` |
+| CPU / GPU | Core Ultra X9 388H / Arc B390 `8086:b080`, `xe` |
+| BIOS tested | 1.10, 2026-06-03 |
+| OS tested | CachyOS, `linux-cachyos 7.2.2-1` with `linux-cachyos-lts 6.18.48-1` retained as fallback |
+| Touchscreen | FocalTech `2808:5662` |
+| Touchpad | Goodix `27c6:0f9a` |
+| Fingerprint | Goodix `27c6:6f94` |
+| Webcam | Luxvisions `30c9:012c`, unlike M1010/M1050 `3277:00de` |
+| Audio | ALC256, subsystem `1ee7:209d` |
+| Battery | NVT `HB7075R5EHW-41T1` |
+| SSD in the unit seen | KIOXIA `KBG60ZNV1T02` |
+| Status | verified for the board-specific subset in the profile |
+
+The stock live `I2C_DEVT` table remained 23,708 bytes with MD5
+`27bb4879b5af49ac2b613a73cf1ffa0b` after the BIOS 1.10 update, exactly the
+table the M1010 override was built from. The installer accepted it through the table hash gate rather than
+through the board name. After reboot the kernel logged:
+
+```text
+ACPI: Table Upgrade: override [SSDT- HONOR-I2C_DEVT]
+```
+
+`TOPS0102:00` and `FTSC1000:00` appeared, and the internal keyboard, touchpad
+and touchscreen worked. This is the evidence behind the M1020
+`acpi-override` recipe; after a BIOS update the live table must be hashed again
+before reusing it.
+
+The 243,659-byte DSDT had SHA-256
+`a73e83433f2500702d7da50947a49267fccd5d1de0cab86cd87c4232da7bc075`, byte
+for byte the same as the M1010 DSDT in this repository. In particular it places
+`FA0L/FA0R` at EC offsets `0x2c/0x2d` and `FA1L/FA1R` at `0x2e/0x2f`. The
+read-only fan module was installed with those offsets and reported two
+plausible RPM values, approximately 2300 and 2000 during the check.
+
+The two HID-BPF fixes were also physically verified. Removing the FTSC1000
+vendor collection eliminated the phantom `KEY_MICMUTE` input without affecting
+touch, and the TOPS0102 program made the left-edge brightness gesture work.
+The right-edge volume gesture remained unchanged.
+
+A hotkey capture recorded WMI `0x288` for the camera toggle, `0x2a3` for
+touchpad-off, and the companion atkbd `f8` scancode. The patched `huawei-wmi`
+and board-specific hwdb removed the unknown-key reports. The action service
+was pointed at this unit's actual `30c9:012c` camera; F8 deauthorised and
+reauthorised only that USB device. Native Plasma OSD was added for both camera
+states, with `POWER_PROFILE_KEY=0` retained.
+
+Stock `linux-cachyos 7.2.2-1` produced a garbled display during boot and logged
+`*ERROR* CPU pipe A FIFO underrun`. Rebuilding only `xe.ko` from the exact
+CachyOS release tree with `cdclk-ptl` removed the underrun and the machine then
+booted cleanly. The LTS kernel remains an unmodified fallback.
+
+The Goodix `27c6:6f94` reader reported no devices with stock libfprint
+`1.94.100-1.1`. A pacman-owned `1.94.100-1.2` package carrying the two-line
+Goodix MOC ID patch enrolled `right-index-finger`, returned `verify-match`, and
+authenticated `sudo`. Password authentication remains as fallback.
+
+The battery limit was later brought up on this board, on BIOS 1.10 and
+`linux-cachyos 7.2.2-1`. Out of the box, writing `70 90` through `huawei-wmi`
+left EC charge mode `0` on both BIOS 1.09 and 1.10, and `GBCM` (WMI `0x1603`)
+read back `mode 0x00, 0x86 = 0x48, start 75, stop 90`, the pair the desktop
+had written. One `\SBCM` call (WMI `0x1503`, payload `0x5a4648021503`) set
+mode `2`; a second, `0x462848011503`, set mode `1`. With `40 70` armed and the
+pack at 65% on the adapter, it charged at about 2.1 A to exactly 70% and
+stopped: `status` `Not charging`, `current_now` 0, held for several minutes.
+After that first `\SBCM`, plain sysfs writes behaved like the M1010: `75 90`
+gave mode 0, `0 100` gave mode 0, `70 90` gave mode 2, immediately and not
+after a delay. The state survived a reboot: the EC came up with `70 90 / mode
+2`, and `0 100` then `70 90` through sysfs disarmed and re-armed it without
+`\SBCM`. `patch/battery/` gained the `\SBCM` fallback and an M1020 recipe on
+the strength of this, and `battery` was added to the board's fix list. Whether
+the latch survives a full power-off with the adapter removed is not yet
+measured; the fallback makes that immaterial for the fix.
+
+The following results are deliberately not promoted into the M1020 fix list:
+- **Headset microphone:** an out-of-tree `snd-hda-codec-alc269` built from
+  vanilla v7.0 source crashed Ubuntu's backported HDA stack in
+  `try_assign_dacs()` during boot. The overlay and temporary M1020 recipe were
+  removed. Matching codec IDs are not enough to make that mixed-source module
+  safe.
+- **Other display patches:** no PSR band or low-brightness OLED defect was
+  reported, so `psr-band`, `oled-backlight` and `edp-dsc` remain disabled.
+
+The verified CachyOS results and the earlier Kubuntu kernel Oops are preserved
+in this M1020 section.
+
 ## The M1050 revision
 
 `ZQC-P` is not one machine. A second board revision reports the same
@@ -530,7 +644,7 @@ measurement rather than an inference.
 | Fingerprint | Goodix `27c6:6f94` | LighTuning EgisTec `1c7a:05aa` |
 | Webcam | Shinetech `3277:00de` | the same |
 | SSD in the unit seen | YMTC PC411 `1e49:1071` | KIOXIA BG6 `1e0f:001a` |
-| Status | verified | reported |
+| Status | verified | verified |
 
 Sources, all from @pilgrim1990:
 [issue 1](https://github.com/rs0x29a/Linux-on-HONOR-MagicBook-14-Pro-2026-AI_ZQC-P_M1010/issues/1)

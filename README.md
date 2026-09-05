@@ -5,11 +5,11 @@ table for the touchpad and touchscreen, kernel-module quirks for audio and
 sensors, HID-BPF programs for the touchpad gestures, a working battery charge
 limit, and the Fn keys.
 
-Built and verified on a **MagicBook Pro 14 2026 (`ZQC-P`, board M1010)**.
-Sixteen further board revisions are recognised and none of them enabled: the
-rest of the Pro line, a second ZQC-P revision, and six machines from
-the other MagicBook lines that share a platform or a part. See
-[Models](#models) and [docs/hardware/](docs/hardware/).
+Built on a **MagicBook Pro 14 2026 (`ZQC-P`, board M1010)**. Further board
+revisions are recognised separately and enable only the fixes supported by
+evidence from that exact revision. `ZQC-P` M1020 was verified independently on
+BIOS 1.10 with CachyOS and a board-specific safe subset. See [Models](#models) and
+[docs/hardware/](docs/hardware/).
 
 ```sh
 sudo ./apply_patch.sh
@@ -37,6 +37,7 @@ recognise it. `uninstall_patch.sh` reverts everything.
 | Battery charge limit does nothing | works | [`patch/battery/`](patch/battery/) — the EC only enforces HONOR's own preset pairs; anything else, including what the desktop sets, is stored and ignored |
 | Performance and camera keys do nothing | works | [`patch/hotkey-actions/`](patch/hotkey-actions/) — a small service acts on the keys the desktop ignores |
 | Some Fn keys dead, `Unknown key pressed` in dmesg | works | [`patch/hotkeys/`](patch/hotkeys/) — adds the HONOR codes to the `huawei-wmi` keymap |
+| Keyboard backlight state, KDE OSD and persistence | works on ZQC-P M1020/C170 | [`patch/hotkeys/`](patch/hotkeys/) — exposes `platform::kbd_backlight`, reports the EC's 0/50/100 states and restores the selected level after reboot and suspend/resume |
 | Fan RPM readout | works | [`patch/fan/`](patch/fan/) — `honor-ec-sensors` |
 | Fan speed control | not available | every OS-side path to a duty cycle was tested and the EC ignores all of them. The EC's *curve* can be selected through `\IFCI`, which is measured but deliberately not shipped, one of its thirteen tables switches the fans off. See [`patch/fan/README.md`](patch/fan/README.md) |
 | SOF DSP suspend/resume panic | preventive | [`patch/sof-audio/`](patch/sof-audio/) — upstream IPC4 backport, the race never reproduced here. Merged upstream and released in Linux 7.2 |
@@ -55,23 +56,25 @@ the codec is on HDA and unaffected. See
 ## Models
 
 Trust is per **board revision**, not per model. HONOR ships one product code as
-several machines: `ZQC-P` is board `M1010` here and board `M1050` elsewhere,
-with a different CPU; `FMB-P` is five revisions across three SKUs. So a profile
+several machines: `ZQC-P` is board `M1010` here, board `M1020` on the BIOS
+1.10 unit documented in this branch, and board `M1050` elsewhere with a
+different CPU; `FMB-P` is five revisions across three SKUs. So a profile
 has one section per revision, each with its own status, and a revision nobody
 has measured never inherits another one's.
 
-Seventeen board revisions across twelve product codes are recognised. What each
-one is, what is known about it, where every claim came from and what it would
-take to move it up: **[docs/hardware/](docs/hardware/)**. That is the record;
-this page does not repeat it.
+Board revisions across twelve product codes are recognised. What each one is,
+what is known about it, where every claim came from and what it would take to
+move it up: **[docs/hardware/](docs/hardware/)**. That is the record; this page
+does not repeat it.
 
-Two of those seventeen have any fixes enabled. In install order, **bold** where
+Three recognised boards have fixes enabled. In install order, **bold** where
 the fix runs and plain where it is listed but declines, which it does by name
 and with the value it is missing rather than silently:
 
 | Board | Fixes |
 |---|---|
 | `ZQC-P` `M1010` | **acpi-override** · **psr-band** · **oled-backlight** · **cdclk-ptl** · **edp-dsc** · **headset-mic** · **sof-audio** · **micmute** · **touchpad-edge** · **fan** · **fingerprint** · **battery** · **hotkeys** · **hotkey-actions** · **auto-rebuild** |
+| `ZQC-P` `M1020` | **acpi-override** · **cdclk-ptl** · **micmute** · **touchpad-edge** · **fan** · **fingerprint** · **battery** · **hotkeys** · **hotkey-actions** · **auto-rebuild** |
 | `ZQC-P` `M1050` | **acpi-override** · **psr-band** · **oled-backlight** · **cdclk-ptl** · **edp-dsc** · **headset-mic** · **sof-audio** · **micmute** · **touchpad-edge** · **fan** · **fingerprint** · **battery** · **hotkeys** · **hotkey-actions** · **auto-rebuild** |
 
 A board below `verified` gets only the tier A subset, and `apply_patch.sh`
@@ -79,8 +82,8 @@ refuses to start on one without `ALLOW_UNVERIFIED=1`. Every other board revision
 has no fixes at all, which is deliberate and is explained with the status words
 in [docs/hardware/README.md](docs/hardware/README.md#what-the-status-words-mean).
 
-The two rows above being equal is not the same as the evidence behind them being
-equal. What each rests on, fix by fix, is on
+The M1010 and M1050 rows being equal is not the same as the evidence behind
+them being equal. What each rests on, fix by fix, is on
 [the ZQC-P page](docs/hardware/zqc-p.md#what-the-verified-on-this-section-rests-on).
 
 The table is generated from the profiles, and `tools/selftest.sh` fails if it
@@ -132,8 +135,9 @@ unlocks everything. Below that, `apply_patch.sh` stops unless you pass
 machine's constants. What each status word means and what it allows:
 [`docs/hardware/README.md`](docs/hardware/README.md#what-the-status-words-mean).
 
-Two board sections are `verified`: `ZQC-P` `M1010`, the machine this was built
-on, and `ZQC-P` `M1050`, on the strength of a dump, an ACPI set and an install
+Three board sections are `verified`: `ZQC-P` `M1010`, the machine this was
+built on; `ZQC-P` `M1020`, with a board-specific subset physically verified on
+BIOS 1.10 and CachyOS; and `ZQC-P` `M1050`, on the strength of a dump, an ACPI set and an install
 log from that machine. Detection reports which board it decided on, and says so
 plainly when that is not one the profile describes.
 
@@ -149,6 +153,7 @@ plainly when that is not one the profile describes.
 | `SKIP_CDCLK=1` | leave the Panther Lake cdclk fix out of the `xe.ko` rebuild |
 | `SKIP_DSC=1` | leave the DSC preference out of it. Both run where the profile lists them; the build downloads the distro kernel source, about 260 MB, and compiles for a few minutes, and the two together build the module once |
 | `CHARGE_PRESET="40 70"` | which battery charge preset to arm. Only the pairs the EC enforces work, see [`patch/battery/README.md`](patch/battery/README.md) |
+| `KBDLIGHT_TIMEOUT=<seconds>` | ZQC-P M1020/C170 keyboard-backlight timeout; default 15, `0` means no timeout. The installer persists it in modprobe configuration |
 | `FORCE_ACPI=1` | install the ACPI override even though your machine's `I2C_DEVT` table is not the one it was built from. That mismatch means a BIOS update rewrote it or this is a different machine; read [docs/RESEARCH.md](docs/RESEARCH.md) first |
 | `ALLOW_UNVERIFIED=1` | run on a board whose profile section is not `verified`, restricted to the fixes that derive their own inputs |
 | `GUARD_ZERO=1` | add a udev rule that bounces a write of `0` to the backlight back to `1`. Writing 0 blanks the panel rather than dimming it, and no VBT value can prevent that. Off by default |
@@ -202,9 +207,10 @@ out. [`patch/README.md`](patch/README.md) is the index.
 
 **[Issue #11](https://github.com/rs0x29a/Linux-on-HONOR-MagicBook-14-Pro-2026-AI_ZQC-P_M1010/issues/11) is where this is tracked.** It lists where every model
 stands, what a dump has to contain, and which numbers cannot be read off a
-machine and have to be measured on it. Only `ZQC-P` board `M1010` is verified;
-everything
-else is waiting on somebody who owns one.
+machine and have to be measured on it. Three `ZQC-P` revisions have verified
+sections: M1010 and M1050 carry the full recorded set, while M1020 deliberately
+enables only the smaller subset tested on that board. Everything else is
+waiting on somebody who owns one.
 
 One read-only command produces everything needed to write a profile for it:
 

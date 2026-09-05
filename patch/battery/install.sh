@@ -78,27 +78,34 @@ fi
 log "preset: $CHARGE_PRESET"
 
 # --- 3. apply and check that the EC armed itself ------------------------------
-echo "$CHARGE_PRESET" > "$NODE"
+# The same functions the boot/resume unit runs: write the pair, read EC 0x85,
+# and if the EC stored the pair without arming (the M1020 out of the box), ask
+# again through \SBCM, which names the mode explicitly.
+# shellcheck source=honor-battery-threshold.sh
+source "${SCRIPT_DIR}/honor-battery-threshold.sh"
+apply_preset "$CHARGE_PRESET"
+ARMED="$APPLIED_MODE"
 log "wrote it: $(cat "$NODE")"
 
-ARMED="unknown"
-if modprobe ec_sys 2>/dev/null && [[ -r /sys/kernel/debug/ec/ec0/io ]]; then
-    # EC 0x85 is the charge mode: 0 means not armed, 1..3 are the preset index.
-    mode=$(dd if=/sys/kernel/debug/ec/ec0/io bs=1 skip=133 count=1 2>/dev/null \
-           | od -An -tu1 | tr -d ' ')
-    ARMED="$mode"
-    if [[ "$CHARGE_PRESET" == "0 100" ]]; then
-        log "EC charge mode: ${mode} (0 = no limit, which is what was asked for)"
-    elif [[ "${mode:-0}" == "0" ]]; then
-        warn "the EC did NOT arm itself (charge mode 0), so the limit is not in
-    effect. Either the preset list in the profile is wrong for this machine, or
-    this firmware wants a different pair."
-    else
-        log "EC armed itself: charge mode ${mode}"
-    fi
-else
+if [[ "$ARMED" == "unknown" ]]; then
     warn "could not read the EC to confirm the limit armed (ec_sys unavailable)."
     warn "The write went through; whether the EC honours it is unverified here."
+elif [[ "$CHARGE_PRESET" == "0 100" ]]; then
+    log "EC charge mode: ${ARMED} (0 = no limit, which is what was asked for)"
+elif [[ "$ARMED" == "0" ]]; then
+    if [[ -w "$WMI_DBG/arg" ]]; then
+        warn "the EC did NOT arm itself (charge mode 0), not even through SBCM, so
+    the limit is not in effect. Either the preset list in the profile is wrong
+    for this machine, or this firmware wants a different pair."
+    else
+        warn "the EC did NOT arm itself (charge mode 0), so the limit is not in
+    effect. The SBCM fallback needs $WMI_DBG, which this kernel does not
+    expose (CONFIG_DEBUG_FS or the huawei-wmi debugfs hook is missing)."
+    fi
+elif [[ "$APPLIED_VIA" == sbcm ]]; then
+    log "EC armed through SBCM: charge mode ${ARMED} (the sysfs write alone was ignored)"
+else
+    log "EC armed itself: charge mode ${ARMED}"
 fi
 
 # --- 4. make the desktop's own switch land on a pair the EC accepts -----------

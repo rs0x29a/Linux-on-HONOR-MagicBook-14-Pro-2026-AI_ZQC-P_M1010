@@ -97,8 +97,21 @@ sudo python3 -c "print(hex(open('/sys/kernel/debug/ec/ec0/io','rb').read(0x100)[
 
 A nonzero value from the last command means the EC armed its limiter and the
 pair works. `0x0` means it stored the pair and ignored it. Try `40 70` and
-`95 100` as well, and tell us which of the three your EC accepts. Why that
-matters and what is known so far:
+`95 100` as well, and tell us which of the three your EC accepts.
+
+If all three read `0x0`, try the request PC Manager makes, `\SBCM`, once:
+
+```sh
+echo 0x5a4648021503 | sudo tee /sys/kernel/debug/huawei-wmi/arg     # 70-90, mode 2
+sudo cat /sys/kernel/debug/huawei-wmi/call > /dev/null
+sudo cat /sys/kernel/debug/huawei-wmi/call > /dev/null              # twice, deliberately
+sudo python3 -c "print(hex(open('/sys/kernel/debug/ec/ec0/io','rb').read(0x100)[0x85]))"
+```
+
+`0x2` now means your EC is like the ZQC-P `M1020`: it enforces the presets but
+has to be told the mode once. Say so in the issue, and then repeat the first
+test, because on that board the plain writes started arming afterwards. Why
+that matters and what is known so far:
 [`patch/battery/README.md`](../patch/battery/README.md).
 
 ### 5. The fans

@@ -81,7 +81,7 @@ a power profile through `powerprofilesctl`, and `authorized` on one USB device.
 The systemd unit is confined accordingly, with `ProtectSystem=strict` and
 `/sys/bus/usb/devices` as the only writable path.
 
-The keyboard backlight keys are left alone on purpose. They arrive correctly,
-but there is no keyboard backlight device in `/sys/class/leds` on this machine
-to drive: the EC appears to handle the backlight itself and only notify the OS
-afterwards, which is what the `0x2e5` code is. Nothing to act on.
+The keyboard backlight keys are left alone here. On ZQC-P M1020/C170,
+[`../hotkeys/`](../hotkeys/) exposes the firmware-controlled levels as
+`/sys/class/leds/platform::kbd_backlight`; UPower and KDE handle that standard
+interface.

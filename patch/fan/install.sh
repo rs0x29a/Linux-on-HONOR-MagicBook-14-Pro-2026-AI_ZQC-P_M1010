@@ -137,14 +137,18 @@ log "Kernel headers present for $KVER"
 if command -v dkms >/dev/null 2>&1; then
     DEST="/usr/src/${MODNAME}-${MODVER}"
     log "Installing via DKMS to $DEST"
-    dkms remove -m "$MODNAME" -v "$MODVER" --all >/dev/null 2>&1 || true
+    REGISTERED=0
+    dkms status 2>/dev/null | grep -q "^${MODNAME}/${MODVER}" && REGISTERED=1
     rm -rf "$DEST"
     install -d "$DEST"
     install -m 644 "$SRC_DIR/honor-ec-sensors.c" "$SRC_DIR/Makefile" \
                    "$SRC_DIR/dkms.conf" "$DEST/"
     # -k is required: dkms otherwise targets the running kernel, which is the
     # wrong one when we are pre-building for a not-yet-booted kernel update.
-    dkms add     -m "$MODNAME" -v "$MODVER"
+    if (( ! REGISTERED )); then
+        dkms add -m "$MODNAME" -v "$MODVER"
+    fi
+    dkms remove  -m "$MODNAME" -v "$MODVER" -k "$KVER" >/dev/null 2>&1 || true
     dkms build   -m "$MODNAME" -v "$MODVER" -k "$KVER"
     dkms install -m "$MODNAME" -v "$MODVER" -k "$KVER"
 else

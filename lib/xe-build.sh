@@ -268,7 +268,8 @@ xe_build_install() {
 
     # --- finish the module the way modules_install would ----------------------
     # BTF first, then strip: .BTF is not a .debug section and survives it.
-    if command -v pahole >/dev/null && [[ -r /sys/kernel/btf/vmlinux ]]; then
+    if [[ "$KVER" == "$(uname -r)" ]] && command -v pahole >/dev/null \
+       && [[ -r /sys/kernel/btf/vmlinux ]]; then
         _xe_log "generating module BTF against the running kernel's base BTF"
         LLVM_OBJCOPY=llvm-objcopy pahole -J --btf_base /sys/kernel/btf/vmlinux "$KO" \
             || _xe_warn "BTF generation failed, continuing without it"

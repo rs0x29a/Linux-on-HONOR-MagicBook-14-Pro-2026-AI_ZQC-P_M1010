@@ -80,6 +80,8 @@ MISSING=()
 for t in clang bpftool curl udev-hid-bpf udevadm; do
     command -v "$t" >/dev/null || MISSING+=("$t")
 done
+[[ -r /usr/include/bpf/bpf_helpers.h && -r /usr/include/bpf/bpf_tracing.h ]] \
+    || MISSING+=(libbpf-dev)
 if (( ${#MISSING[@]} )); then
     die "missing required tool(s): ${MISSING[*]}
     $(distro_pkg_hint "${MISSING[@]}")
@@ -107,17 +109,25 @@ log "kernel  = ${KVER}"
 # needed even though this program does not touch the descriptor.
 ksrc_resolve
 log "headers = ${KSRC_TAG}"
-for h in hid_bpf.h hid_bpf_helpers.h hid_report_descriptor_helpers.h; do
+for h in hid_bpf.h hid_bpf_helpers.h; do
     ksrc_fetch "drivers/hid/bpf/progs/${h}" "${WORK}/${h}"
 done
+if grep -q 'hid_report_descriptor_helpers.h' "${WORK}/hid_bpf_helpers.h"; then
+    ksrc_fetch "drivers/hid/bpf/progs/hid_report_descriptor_helpers.h" \
+               "${WORK}/hid_report_descriptor_helpers.h"
+fi
 bpftool btf dump file /sys/kernel/btf/vmlinux format c > "${WORK}/vmlinux.h"
 
 # --- 3. build -----------------------------------------------------------------
 log "building ${OBJ_NAME}"
 cp "$SRC" "${WORK}/"
+CLANG_INCLUDES=(-I"$WORK")
+for d in /usr/include/*-linux-gnu; do
+    [[ -r "$d/asm/errno.h" ]] && { CLANG_INCLUDES+=("-I$d"); break; }
+done
 clang -O2 -g -target bpf -mcpu=v3 -D__TARGET_ARCH_x86 \
       -DHID_VID="${HID_VID}" -DHID_PID="${HID_PID}" \
-      -I"$WORK" -Wno-missing-declarations \
+      "${CLANG_INCLUDES[@]}" -Wno-missing-declarations \
       -c "${WORK}/$(basename "$SRC")" -o "${WORK}/${OBJ_NAME}" 2>&1 \
     | grep -vE "does not declare anything|^ *[0-9]+ \||^ +\^|In file included from|warnings? generated" \
     || true
@@ -143,9 +153,13 @@ fi
 log "attaching to ${DEV##*/}"
 udev-hid-bpf remove "$DEV" >/dev/null 2>&1 || true
 sleep 1
-udev-hid-bpf add "$DEV" "${INSTALL_DIR}/${OBJ_NAME}" >/dev/null 2>&1 || true
+udev-hid-bpf add "$DEV" "${INSTALL_DIR}/${OBJ_NAME}" >/dev/null 2>&1 \
+    || die "udev-hid-bpf could not attach the program to the device"
 
-edge_attached() { udev-hid-bpf list-loaded 2>/dev/null | grep -q "$PROG_TAG"; }
+edge_attached() {
+    udev-hid-bpf list-loaded 2>/dev/null | grep -q "$PROG_TAG" \
+        || bpftool prog show 2>/dev/null | grep -q "$PROG_TAG"
+}
 gate_wait_until 10 edge_attached \
     || die "the program is not attached to the device"
 
@@ -165,7 +179,7 @@ cat <<EOF
   Nothing to redo after a kernel update.
 
   Verify:
-      sudo udev-hid-bpf list-loaded | grep ${PROG_TAG}
+      sudo bpftool prog show | grep ${PROG_TAG}
       sudo evtest /dev/input/event\$(...)   # Consumer Control device
       # or simply watch the value while sliding:
       watch -n0.2 cat /sys/class/backlight/intel_backlight/brightness

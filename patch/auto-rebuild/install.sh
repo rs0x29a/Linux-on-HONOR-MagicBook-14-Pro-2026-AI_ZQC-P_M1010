@@ -105,9 +105,9 @@ chmod 0644 "$CONF"
 if [[ "$HOOK_STYLE" == arch ]]; then
     INSTALLED_HOOKS="  ${HOOK_DIR}/95-honor-kernel-modules.hook
   ${HOOK_DIR}/96-honor-libfprint.hook"
-    WHAT_IS_HOOKED="  From now on a kernel update rebuilds patch/headset-mic/ and
-  patch/sof-audio/ for the new kernel automatically, and a libfprint
-  update re-applies patch/fingerprint/ shortly after the transaction."
+    WHAT_IS_HOOKED="  From now on a kernel update rebuilds the module overlays listed for this
+  board automatically, and a libfprint update re-applies patch/fingerprint/
+  shortly after the transaction."
     UNINSTALL_HOOKS="${HOOK_DIR}/9[56]-honor-*.hook"
 else
     INSTALLED_HOOKS="  ${HOOK_DIR}/95-honor-kernel-modules"

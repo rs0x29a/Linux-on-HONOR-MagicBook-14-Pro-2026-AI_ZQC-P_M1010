@@ -10,7 +10,7 @@ ExecStart=/usr/local/lib/honor/honor-hotkey-actions.py
 Restart=always
 RestartSec=5
 # It reads one input device and writes two sysfs attributes. Nothing else.
-ProtectHome=yes
+ProtectHome=read-only
 ProtectSystem=strict
 ReadWritePaths=/sys/bus/usb/devices
 PrivateTmp=yes

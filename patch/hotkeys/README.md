@@ -27,8 +27,8 @@ Codes this machine was observed emitting, confirmed by pressing every key with
 | `0x283` / `0x2a3` | `KEY_TOUCHPAD_ON` / `KEY_TOUCHPAD_OFF` | added here |
 | `0x288` | `KEY_CAMERA_ACCESS_TOGGLE` | added here |
 | `0x2a1` | `KEY_PROG1`, performance mode | added here |
-| `0x2b1` / `0x2b2` | `KEY_KBDILLUMDOWN` | added here |
-| `0x2b3` | `KEY_KBDILLUMUP` | added here |
+| `0x2b1` / `0x2b2` | off / low keyboard-backlight state; M1020 reports LED levels 0 / 1 | added here |
+| `0x2b3` | high keyboard-backlight state; M1020 reports LED level 2 | added here |
 | `0x2e5` | ignored, an EC notification rather than a key press | added here |
 | `0x287` | `KEY_MICMUTE` | already in-tree |
 | `0x28a` | `KEY_CONFIG`, the vendor key | already in-tree |
@@ -66,6 +66,53 @@ at once, and labels each press:
 The last row is worth knowing before hunting for a missing mapping: several
 keys on these machines never leave the EC, and no driver change can surface
 them.
+
+## Keyboard backlight on ZQC-P M1020/C170
+
+BIOS 1.10 was measured before this was enabled. One physical cycle emitted
+`0x2b1 → 0x2b2 → 0x2b3`, meaning off, low and high. The firmware WMI methods
+then returned and physically applied the same three states:
+
+| Command | Measured result |
+|---|---|
+| `GKBM` (`0x1306`) | reads mode `0x02` / `0x03` / `0x04` |
+| `SKBM` (`0x1406`) | physically sets off / low / high; a test value of 25 returned status `0x01` and left the mode unchanged |
+| `GKBT` (`0x1206`) | read the stock timeout as 15 seconds |
+| `SKBT` (`0x1106`) | a temporary 5-second value read back as 5 and physically timed out after about 5 seconds |
+
+`add-m1020-kbdlight.py` extends the same `huawei-wmi` overlay with a standard
+`platform::kbd_backlight` LED. It is gated on the exact HONOR, ZQC-P, M1020,
+C170 DMI identity and checks that all four ACPI methods exist. It uses those
+firmware methods, not direct EC writes. Hardware key notifications update the
+LED as 0, 1 or 2, so UPower and KDE display 0%, 50% and 100% without applying a
+second brightness step.
+
+The LED uses `LED_CORE_SUSPENDRESUME`. systemd automatically attaches
+`systemd-backlight@leds:platform::kbd_backlight.service`, which saves and
+restores its last level across boots. Restoration after both reboot and
+suspend/resume was physically verified on this unit.
+
+The timeout defaults to 15 seconds. Set any value from 0 through 65535 by
+rerunning the installer; zero means no timeout:
+
+```sh
+sudo KBDLIGHT_TIMEOUT=30 bash patch/hotkeys/install.sh
+sudo KBDLIGHT_TIMEOUT=0 bash patch/hotkeys/install.sh
+```
+
+The installer keeps a custom value in
+`/etc/modprobe.d/61-honor-keyboard-backlight.conf`, including when the automatic
+kernel-update rebuild reruns it.
+
+Touchpad wake was tested and is not offered. Activity reaches the correct
+`TOPS0102 27c6:0f9a` input device, but repeating `SKBM` does not restart an
+expired timer and `SKBL` is a firmware stub. The sibling model's raw EC `0x01`
+latch is not used on M1020 without firmware evidence.
+
+A long-press shortcut is deliberately not implemented. Holding the key for
+about 5.6 seconds was visible only through companion atkbd scancode `f8`, and
+that same scancode accompanies every HONOR hotkey. Treating it as a backlight
+long press would therefore let another held Fn key change the timeout.
 
 ## Why this cannot be a udev rule
 

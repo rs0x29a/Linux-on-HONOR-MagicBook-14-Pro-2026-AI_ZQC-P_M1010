@@ -96,7 +96,14 @@ req curl
 req zstdcat
 req zstd
 req make
-req clang
+if distro_kernel_config_has CONFIG_CC_IS_CLANG=y "$KVER"; then
+    MODULE_CC=clang
+    MODULE_LLVM="LLVM=1 LLVM_IAS=1"
+else
+    MODULE_CC=gcc
+    MODULE_LLVM=
+fi
+req "$MODULE_CC"
 req depmod
 req modprobe
 req strings
@@ -350,7 +357,7 @@ snd-hda-codec-alc269-y := alc269.o
 ccflags-y += -I\$(src)
 
 default:
-	\$(MAKE) -C \$(KDIR) M=\$(PWD) CC=clang LLVM=1 modules
+	\$(MAKE) -C \$(KDIR) M=\$(PWD) CC=${MODULE_CC} ${MODULE_LLVM} modules
 
 clean:
 	\$(MAKE) -C \$(KDIR) M=\$(PWD) clean

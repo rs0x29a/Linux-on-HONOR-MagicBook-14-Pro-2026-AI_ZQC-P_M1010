@@ -3,6 +3,7 @@
 # and silence the meaningless atkbd scancode the EC sends alongside them.
 #
 #   sudo bash install.sh
+#   sudo KBDLIGHT_TIMEOUT=30 bash install.sh    # M1020 only; 0 disables timeout
 #   sudo KVER=7.1.8-1-cachyos bash install.sh   # build for a not-yet-booted kernel
 #
 # Reruns are safe. Re-run after a kernel update, or install patch/auto-rebuild/.
@@ -18,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KVER="${KVER:-$(uname -r)}"
 SRC_REL="drivers/platform/x86/huawei-wmi.c"
 HWDB_DST=/etc/udev/hwdb.d/61-honor-keyboard.hwdb
+KBDLIGHT_CONF=/etc/modprobe.d/61-honor-keyboard-backlight.conf
 WORK=$(mktemp -d /var/tmp/honor-hotkeys-XXXXXX)
 trap 'rm -rf "$WORK"' EXIT
 
@@ -50,6 +52,12 @@ KDIR="$(distro_module_dir "$KVER")/build"
 
 log "machine = $(variant_note)"
 log "kernel  = $KVER"
+if [[ -n "${KBDLIGHT_TIMEOUT:-}" ]]; then
+    [[ "${PROFILE_BOARD:-}" == M1020 ]] \
+        || die "KBDLIGHT_TIMEOUT is only supported by the physically verified ZQC-P M1020 implementation"
+    [[ "$KBDLIGHT_TIMEOUT" =~ ^[0-9]+$ ]] && (( KBDLIGHT_TIMEOUT <= 65535 )) \
+        || die "KBDLIGHT_TIMEOUT must be an integer from 0 through 65535 seconds"
+fi
 
 # --- 2. fetch the driver source matching the running kernel -------------------
 ksrc_resolve
@@ -110,6 +118,7 @@ else:
     open(path, "w").write(src)
     print("added %d keymap entries" % sum(1 for l in new if "KE_" in l))
 PYEOF
+python3 "${SCRIPT_DIR}/add-m1020-kbdlight.py" "${WORK}/huawei-wmi.c"
 
 # --- 4. build -----------------------------------------------------------------
 cat > "${WORK}/Makefile" <<EOF
@@ -133,6 +142,17 @@ OLD_VM=$(modinfo -k "$KVER" huawei-wmi 2>/dev/null | awk -F': *' '/^vermagic:/{p
 
 DEST="$(distro_module_install "${WORK}/huawei-wmi.ko" huawei-wmi "$KVER")"
 log "installed $DEST"
+
+if [[ -n "${KBDLIGHT_TIMEOUT:-}" ]]; then
+    cat > "$KBDLIGHT_CONF" <<EOF
+# Written by patch/hotkeys/install.sh. Zero disables the keyboard-backlight timeout.
+options huawei-wmi kbdlight_timeout=$KBDLIGHT_TIMEOUT
+EOF
+    chmod 0644 "$KBDLIGHT_CONF"
+    log "keyboard backlight timeout = $KBDLIGHT_TIMEOUT seconds"
+elif [[ -r "$KBDLIGHT_CONF" ]]; then
+    log "preserving keyboard backlight timeout from $KBDLIGHT_CONF"
+fi
 
 # --- 5. silence the companion atkbd scancode ----------------------------------
 gate_hwdb_render "$HWDB_SRC" "$HWDB_DST"
@@ -168,5 +188,11 @@ cat <<EOF
 
   What each one is bound to is then up to the desktop: the performance-mode
   key arrives as KEY_PROG1, the touchpad lock as KEY_TOUCHPAD_ON/OFF.
+
+  On ZQC-P M1020/C170, keyboard backlight is available to KDE and UPower at:
+      /sys/class/leds/platform::kbd_backlight
+  The default timeout is 15 seconds. Set another value by rerunning, for example:
+      sudo KBDLIGHT_TIMEOUT=30 bash $0
+  Use 0 for no timeout. The setting is kept across kernel auto-rebuilds.
 ════════════════════════════════════════════════════════════════════
 EOF

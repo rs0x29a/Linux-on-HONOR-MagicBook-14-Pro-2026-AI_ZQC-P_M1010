@@ -61,6 +61,50 @@ print('start',d[0x80],'stop',d[0x81],'mode',hex(d[0x85]))"
 `0x85` reading `0x00` after you set a limit means the limit is not in effect,
 whatever sysfs says.
 
+## When even the presets do not arm: `\SBCM`
+
+There is a second case, seen on the ZQC-P board `M1020` on BIOS 1.09 and 1.10
+straight out of the box: `70 90` is one of the presets, sysfs reads it back,
+and `0x85` still stays `0x00`. Same DSDT as the `M1010` byte for byte, same EC
+field map, different EC state.
+
+The firmware exposes two WMI functions for this, and the kernel uses only one:
+
+| WMI | ACPI method | writes to the EC |
+|---|---|---|
+| `0x1003` | `\SBTT` | `0x80` start, `0x81` stop |
+| `0x1503` | `\SBCM` | `0x85` **mode**, `0x86`, `0x80` start, `0x81` stop |
+
+`huawei-wmi`'s `charge_control_thresholds` is `\SBTT`: it hands the EC a pair
+and leaves the EC to decide whether that means a mode. `\SBCM` is what HONOR
+PC Manager calls: it names the mode. The payload, as the u64 the driver's
+debugfs hook takes, least significant byte first, is
+
+```
+03 15 <mode> 48 <start> <stop>       e.g.  0x5a4648021503  = 70-90, mode 2
+```
+
+decoded by sermart1234 in 2022 and confirmed on 2026 firmware by tsukasagenesis
+(links under Credit). The `0x48` is whatever the EC already holds at `0x86`;
+`GBCM` (`0x1603`) reads it back, and every working report uses that value.
+
+On the `M1020`, one `\SBCM` call did two things. It armed the limit, `0x85`
+read `2`, and the pack, charging from 65% under a `40 70` preset, stopped at
+exactly 70% with `status` `Not charging` and zero current. And from then on
+plain `\SBTT` writes of the presets armed the EC too, exactly as on the
+`M1010`, and that stuck across a reboot. The most economical reading is that
+the EC has a "battery protection enabled" latch that PC Manager sets from
+Windows; the `M1010` reference machine had it, this one never had PC Manager
+touch it.
+
+The installer and the boot/resume unit do not rely on that latch. Both write
+the pair, read `0x85`, and if it is `0` for an armed preset, repeat the request
+through `\SBCM` and read `0x85` again. That path needs
+`/sys/kernel/debug/huawei-wmi`, which any kernel with `CONFIG_DEBUG_FS` and the
+in-tree driver has; without it the installer says so instead of guessing. Only
+the three known pairs are ever sent that way: a zero pair through `\SBCM` is
+what older ECs take as "smart charge", and it is not reachable from here.
+
 ## What the installer does
 
 1. Refuses a pair that is not in `presets` in this fix's own directory for that
@@ -68,6 +112,8 @@ whatever sysfs says.
    and letting it quietly do nothing.
 2. Writes the pair, then **reads EC `0x85` back** and says whether the EC armed
    itself. The point of this fix is that a successful write proves nothing.
+   If it did not, and the pair is one of the three, asks again through
+   `\SBCM` and reads `0x85` a second time.
 3. Installs `/etc/honor-battery.conf` and two small units that re-apply the
    pair at boot and after resume.
 

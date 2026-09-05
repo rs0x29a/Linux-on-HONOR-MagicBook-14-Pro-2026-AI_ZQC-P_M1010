@@ -290,7 +290,7 @@ fi
 if command -v pacman >/dev/null 2>&1; then
     log "Installing build dependencies (pacman)"
     pacman -S --needed --noconfirm \
-        base-devel git meson ninja glib2 libgusb nss libgudev \
+        base-devel git meson ninja glib2-devel libgusb nss libgudev \
         gobject-introspection cairo pixman polkit dbus systemd-libs
     NEED_FPRINTD_PKG="fprintd"
 elif command -v apt-get >/dev/null 2>&1; then
@@ -313,8 +313,17 @@ else
 fi
 
 # --- 3. clone + patch + build -------------------------------------------------
-log "Cloning libfprint"
-git clone --depth 1 https://gitlab.freedesktop.org/libfprint/libfprint.git \
+FP_BUILD_TAG=""
+if command -v pacman >/dev/null 2>&1; then
+    FP_BUILD_VER="$(pacman -Q libfprint 2>/dev/null | awk '{print $2}' | cut -d- -f1)"
+    [[ -n "$FP_BUILD_VER" ]] || FP_BUILD_VER="$(pacman -Si libfprint 2>/dev/null | awk '/^Version/{print $3; exit}' | cut -d- -f1)"
+    [[ -n "$FP_BUILD_VER" ]] || die "cannot determine the repository libfprint version"
+    FP_BUILD_TAG="v${FP_BUILD_VER}"
+fi
+log "Cloning libfprint ${FP_BUILD_TAG:-master}"
+CLONE_ARGS=(--depth 1)
+[[ -n "$FP_BUILD_TAG" ]] && CLONE_ARGS+=(--branch "$FP_BUILD_TAG")
+git clone "${CLONE_ARGS[@]}" https://gitlab.freedesktop.org/libfprint/libfprint.git \
     "$WORK/libfprint" >/dev/null 2>&1 || die "clone failed"
 
 cd "$WORK/libfprint"
@@ -335,7 +344,10 @@ log "Configuring and building (this takes a minute)"
 meson setup build \
     --prefix=/usr --libdir=lib --buildtype=release \
     -Ddrivers=all -Dintrospection=true -Ddoc=false -Dgtk-examples=false \
-    >/dev/null || die "meson setup failed"
+    >"$WORK/meson-setup.log" 2>&1 || {
+        tail -40 "$WORK/meson-setup.log" >&2
+        die "meson setup failed"
+    }
 ninja -C build >/dev/null || die "build failed"
 
 # --- 4. verify against the real device BEFORE installing ----------------------
@@ -415,6 +427,10 @@ PYEOF
 
     PKGFILE=$(ls -t "$PKGDIR"/libfprint-*.pkg.tar.* 2>/dev/null | head -1)
     [[ -n "$PKGFILE" ]] || die "makepkg produced no package in $PKGDIR"
+    log "Inspecting $(basename "$PKGFILE")"
+    pacman -Qip "$PKGFILE" >/dev/null || die "the built package has invalid metadata"
+    pacman -Qlp "$PKGFILE" | grep -q '/usr/lib/libfprint-2\.so' \
+        || die "the built package does not contain libfprint-2.so"
     log "Installing $(basename "$PKGFILE")"
     pacman -U --noconfirm "$PKGFILE" || die "pacman -U failed"
     fp_write_stamp
@@ -457,8 +473,9 @@ Done. Next steps (run as your normal user, NOT root):
 
 If enrollment works, enable it for login/sudo:
 
-    Arch/CachyOS:  add "auth sufficient pam_fprintd.so" above the pam_unix
-                   line in /etc/pam.d/system-local-login and /etc/pam.d/sudo
+    Arch/CachyOS:  back up /etc/pam.d/system-login and /etc/pam.d/sudo, then
+                   add "auth sufficient pam_fprintd.so" before their
+                   "auth include system-auth" lines
     Debian/Ubuntu: sudo pam-auth-update --enable fprintd
     Fedora:        sudo authselect enable-feature with-fingerprint
 

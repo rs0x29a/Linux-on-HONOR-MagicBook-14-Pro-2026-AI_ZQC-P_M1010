@@ -9,10 +9,10 @@ prose that a profile deliberately does not carry.
 
 Almost every profile ships with **no fixes enabled**: the data below describes
 the machine, it is not a report that anything was installed on it. The
-exceptions are `ZQC-P` `M1010`, measured here, and `ZQC-P` `M1050`, whose owner
-sent a hardware dump, a full set of ACPI tables and an install log from that
-machine, and had already been running the whole set. What that second one rests
-on, fix by fix, is on [its page](zqc-p.md#what-the-verified-on-this-section-rests-on).
+exceptions are three `ZQC-P` revisions: `M1010`, measured here; `M1020`, whose
+smaller safe subset was tested on a BIOS 1.09 unit; and `M1050`, whose owner sent
+a hardware dump, a full set of ACPI tables and an install log from that machine.
+What each rests on, fix by fix, is on [the ZQC-P page](zqc-p.md).
 
 A status belongs to a **board revision**, not to a model. HONOR ships one
 product code as several machines, so a profile has one `[board ...]` section per
@@ -52,6 +52,7 @@ Moving a model up a row takes one person and one afternoon:
 | Model | Board | Machine | Platform | Status | Page |
 |---|---|---|---|---|---|
 | `ZQC-P` | `M1010` | MagicBook Pro 14 2026 (AI) | Panther Lake | verified | [zqc-p.md](zqc-p.md) |
+| `ZQC-P` | `M1020` | the same, Core Ultra X9 388H, SKU C170 | Panther Lake | verified subset | [zqc-p.md](zqc-p.md#the-m1020-revision) |
 | `ZQC-P` | `M1050` | the same, Core Ultra 5 338H | Panther Lake | verified | [zqc-p.md](zqc-p.md#the-m1050-revision) |
 | `XWC-P` | `M1110`, `M1120` | MagicBook Pro 16 2026 | Panther Lake | reported, one section each | [xwc-p.md](xwc-p.md) |
 | `FMB-P` | five, one section each | MagicBook Pro 14 2025 | Arrow Lake H | probed | [fmb-p.md](fmb-p.md) |

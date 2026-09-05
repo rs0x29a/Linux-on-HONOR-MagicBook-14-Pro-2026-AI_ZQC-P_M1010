@@ -18,3 +18,4 @@ __pycache__/
 # vendor-scoped one: see dump/win11/README.md for why a whole HKLM export
 # must never be added here.
 dump/win11/*/*.reg
+/AGENT.md

@@ -13,6 +13,7 @@ shopt -s nullglob
 u_rm "/usr/lib/modules/${KVER}/updates/huawei-wmi.ko" \
      "/usr/lib/modules/${KVER}/updates/huawei-wmi.ko.zst" \
      /etc/udev/hwdb.d/61-honor-keyboard.hwdb \
+     /etc/modprobe.d/61-honor-keyboard-backlight.conf \
   || echo "    nothing installed"
 shopt -u nullglob
 command -v systemd-hwdb >/dev/null && systemd-hwdb update 2>/dev/null || true

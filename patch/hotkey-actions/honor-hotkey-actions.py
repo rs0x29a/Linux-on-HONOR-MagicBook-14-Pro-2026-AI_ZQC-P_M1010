@@ -15,6 +15,7 @@ Configured by /etc/honor-hotkey-actions.conf, written by install.sh.
 
 import errno
 import os
+import pwd
 import re
 import select
 import struct
@@ -150,6 +151,39 @@ def camera_is_on(usb_id):
     return None
 
 
+def show_camera_osd(on):
+    try:
+        session = subprocess.run(
+            ["loginctl", "show-seat", "seat0", "-p", "ActiveSession", "--value"],
+            capture_output=True, text=True, timeout=3).stdout.strip()
+        if not session:
+            return
+        uid = int(subprocess.run(
+            ["loginctl", "show-session", session, "-p", "User", "--value"],
+            capture_output=True, text=True, timeout=3).stdout.strip())
+        if uid <= 0 or not os.path.exists(f"/run/user/{uid}/bus"):
+            return
+        user = pwd.getpwuid(uid).pw_name
+        result = subprocess.run([
+            "runuser", "-u", user, "--", "env",
+            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+            "qdbus6", "org.kde.plasmashell", "/org/kde/osdService",
+            "org.kde.osdService.showText", "camera-on" if on else "camera-off",
+            "Camera Enabled" if on else "Camera Disabled",
+        ], capture_output=True, text=True, timeout=3)
+        if result.returncode:
+            log(f"camera OSD failed: {result.stderr.strip() or result.returncode}")
+    except (FileNotFoundError, KeyError, OSError, ValueError, subprocess.SubprocessError) as e:
+        log(f"camera OSD failed: {e}")
+
+
+def set_camera_with_osd(usb_id, on):
+    state = set_camera(usb_id, on)
+    if state is not None:
+        show_camera_osd(state)
+    return state
+
+
 # --- main loop ---------------------------------------------------------------
 
 def main():
@@ -188,11 +222,11 @@ def main():
                         cycle_power_profile()
                     elif do_camera and code == KEY_CAMERA_ACCESS_TOGGLE:
                         cur = camera_is_on(camera_id)
-                        set_camera(camera_id, not cur if cur is not None else False)
+                        set_camera_with_osd(camera_id, not cur if cur is not None else False)
                     elif do_camera and code == KEY_CAMERA_ACCESS_ENABLE:
-                        set_camera(camera_id, True)
+                        set_camera_with_osd(camera_id, True)
                     elif do_camera and code == KEY_CAMERA_ACCESS_DISABLE:
-                        set_camera(camera_id, False)
+                        set_camera_with_osd(camera_id, False)
         except OSError as e:
             if e.errno not in (errno.ENODEV, errno.EIO):
                 log(f"read error: {e}")
