@@ -65,7 +65,7 @@ and are recognised for that reason:
 | Model | Machine | Platform | Status | Page | Why it is here |
 |---|---|---|---|---|---|
 | `BCC-N` | MagicBook 14 2026 | Panther Lake | probed | [bcc-n.md](bcc-n.md) | same platform and the same ACPI fault as the 2026 Pro |
-| `MRA-XXX` | MagicBook Art 14 2024 | Meteor Lake | probed | [mra-xxx.md](mra-xxx.md) | the same FocalTech touchscreen, so `micmute` applies |
+| `MRA-XXX` | MagicBook Art 14 2024 | Meteor Lake | probed | [mra-xxx.md](mra-xxx.md) | the same FocalTech touchscreen, so `micmute` applies; [power](mra-xxx-power.md) and [touchpad](mra-xxx-touchpad.md) measured on `M1010` |
 | `MRB-XXX` | MagicBook Art 14 2025 | Arrow Lake H | probed | [mrb-xxx.md](mrb-xxx.md) | the same again |
 | `FRB-X` | MagicBook X14 Plus 2025 | Raptor Lake | probed | [frb-x.md](frb-x.md) | nothing here applies, and saying so is the point |
 | `GLO-GXXX` | MagicBook 14 2023 | Raptor Lake | probed | [glo-gxxx.md](glo-gxxx.md) | the machine the upstream touchpad quirk was written for |
